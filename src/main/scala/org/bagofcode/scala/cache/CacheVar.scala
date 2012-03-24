@@ -3,7 +3,7 @@ package org.bagofcode.scala.cache
 import scala.actors.Actor
 import scala.actors.TIMEOUT
 
-class CacheVar[T](func: => T, timeout: Int) {
+class CacheVar[T](func: => T, lifespan: Int) {
   private var value: Option[T] = None
   private var created: Long = 0
 
@@ -17,7 +17,7 @@ class CacheVar[T](func: => T, timeout: Int) {
           case None => {
             value = Some(func)
             created = System.currentTimeMillis
-            watcher ! TIMEOUT
+            CacheVarWatcher ! Register(this)
             value.get
           }
         }
@@ -25,13 +25,11 @@ class CacheVar[T](func: => T, timeout: Int) {
     }
   }
 
-  def reset = this.synchronized { value = None; created = 0; watcher ! TIMEOUT }
+  def reset = this.synchronized { value = None; created = 0 }
 
   def check = if (expired) reset
 
   def expired = expiresOn <= System.currentTimeMillis
 
-  def expiresOn = created + timeout
-
-  private lazy val watcher = new CacheVarWatcher(this)
+  def expiresOn = created + lifespan
 }

@@ -6,22 +6,30 @@ import scala.actors.TIMEOUT
 import scala.ref.WeakReference
 import java.lang.System.currentTimeMillis
 
-class CacheVarWatcher private (toWatch: WeakReference[CacheVar[_]]) extends Actor {
-  def this(watch: CacheVar[_]) = this(new WeakReference(watch))
+object CacheVarWatcher extends Actor {
 
-  private def timeout = toWatch.get match {
-    case Some(v) => if(v.expired) 5000 else v.expiresOn - currentTimeMillis
-    case None => exit
+  private val vars = new java.util.TreeMap[Long, WeakReference[CacheVar[_]]]
+
+  private def timeout: Long = if (vars.isEmpty()) 60000
+  else {
+    var firtstEntry = vars.firstEntry
+    firtstEntry.getValue.get match {
+      case Some(v) => if (v.expired) { vars.remove(firtstEntry.getKey); timeout }
+      else { v.expiresOn - currentTimeMillis }
+      case None => { vars.remove(firtstEntry.getKey); timeout }
+    }
   }
 
   override def act = loop {
     receiveWithin(timeout) {
-      case TIMEOUT => toWatch.get match {
-        case Some(v) => v.check
-        case None => exit
-      }
+      case TIMEOUT =>
+      case Register(v) => vars.put(v.expiresOn,new WeakReference(v))
     }
   }
   
+  def size = vars.size()
+
   start
 }
+
+case class Register(toRegister: CacheVar[_])

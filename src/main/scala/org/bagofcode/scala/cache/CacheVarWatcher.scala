@@ -10,13 +10,12 @@ class CacheVarWatcher private (toWatch: WeakReference[CacheVar[_]]) extends Acto
   def this(watch: CacheVar[_]) = this(new WeakReference(watch))
 
   private def timeout = toWatch.get match {
-    case Some(v) => v.expiresOn - currentTimeMillis
+    case Some(v) => if(v.expired) 5000 else v.expiresOn - currentTimeMillis
     case None => exit
   }
 
   override def act = loop {
     receiveWithin(timeout) {
-      case Stop => exit
       case TIMEOUT => toWatch.get match {
         case Some(v) => v.check
         case None => exit
@@ -24,7 +23,5 @@ class CacheVarWatcher private (toWatch: WeakReference[CacheVar[_]]) extends Acto
     }
   }
   
-  def run = if(getState == Terminated) restart else start
+  start
 }
-
-case object Stop

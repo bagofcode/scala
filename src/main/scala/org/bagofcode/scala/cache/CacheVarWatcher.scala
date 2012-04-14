@@ -15,7 +15,7 @@ object CacheVarWatcher extends Actor {
 
   private val vars = new PriorityQueue[T]
 
-  private def timeout: Long = if (vars.size == 0) 60000
+  private def interval: Long = if (vars.size == 0) 60000
   else {
     var top = vars.dequeue
     if (top._1 < millis)
@@ -25,19 +25,20 @@ object CacheVarWatcher extends Actor {
             v.check
             if (!v.expired) vars.enqueue((v.expiresOn, top._2))
           }
-          timeout
+          interval
         }
-        case None => timeout
+        case None => interval
       }
     else {
       var ret = top._1 - millis
       if (ret <= 0) ret = 1
+      vars.enqueue(top)
       ret
     }
   }
 
   override def act = loop {
-    receiveWithin(timeout) {
+    receiveWithin(interval) {
       case TIMEOUT =>
       case Register(v) => vars.enqueue((v.expiresOn, new WeakReference(v)))
     }
